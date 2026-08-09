@@ -1,0 +1,44 @@
+---
+---
+
+@use 'main
+{%- if jekyll.environment == 'production' -%}
+  .bundle
+{%- endif -%}
+';
+
+/* Vietnamese-friendly typography */
+:root {
+  --font-sans: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-sans);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+#sidebar .site-title,
+#sidebar .site-subtitle {
+  font-family: var(--font-sans);
+}
+
+code,
+kbd,
+samp,
+pre,
+.highlight,
+.highlight code,
+.highlight pre {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
