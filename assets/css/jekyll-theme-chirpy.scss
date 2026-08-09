@@ -11,6 +11,9 @@
 :root {
   --font-sans: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --bs-font-sans-serif: var(--font-sans);
+  --bs-body-font-family: var(--font-sans);
+  --bs-font-monospace: var(--font-mono);
 }
 
 body,
@@ -28,7 +31,18 @@ h4,
 h5,
 h6,
 #sidebar .site-title,
-#sidebar .site-subtitle {
+#sidebar .site-subtitle,
+header .post-desc,
+#toc-bar .label,
+#toc-popup .header .label,
+#toc-popup #toc-popup-content,
+#toc-solo-trigger .label,
+#topbar-title,
+#search-results a,
+#notification.toast .toast-body,
+.pagination,
+#archives .date.day,
+.tag span {
   font-family: var(--font-sans);
 }
 
