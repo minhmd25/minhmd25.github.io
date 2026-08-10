@@ -9,30 +9,23 @@ toc: true
 mermaid: true
 ---
 
-> Bài viết phục vụ nghiên cứu và phòng thủ. Các đoạn code chỉ dùng để chứng minh nguyên nhân và hiệu quả bản vá; bài viết không cung cấp payload hoàn chỉnh hoặc hướng dẫn khai thác mục tiêu thực tế.
-{: .prompt-warning }
+## Tóm tắt kỹ thuật
 
-## Kết luận nghiên cứu
-
-`wp2shell` không phải một lỗ hổng đơn lẻ. Đây là chuỗi khai thác kết hợp:
+`wp2shell` là một exploit chain kết hợp hai lỗi trong WordPress Core:
 
 - **CVE-2026-63030** — lỗi *interpretation conflict* trong REST API Batch khiến kết quả validation của request này có thể bị ghép với handler của request khác.
 - **CVE-2026-60137** — SQL Injection tại `author__not_in` của `WP_Query` khi giá trị scalar không được chuẩn hóa thành danh sách số nguyên.
 
-Trên WordPress **6.9.0–6.9.4** và **7.0.0–7.0.1**, hai primitive này có thể nối tiếp thành RCE trước xác thực trên một cài đặt mặc định, không cần plugin và không cần người dùng tương tác. WordPress xác nhận full chain trong [GHSA-ff9f-jf42-662q](https://github.com/WordPress/wordpress-develop/security/advisories/GHSA-ff9f-jf42-662q); bản ghi CVE chấm **9.8 Critical** và CISA đã thêm CVE-2026-63030 vào KEV ngày 21/07/2026.
+Lỗi thứ nhất làm dữ liệu được validation theo route này nhưng được xử lý bởi handler của route khác; lỗi thứ hai cho phép scalar chưa chuẩn hóa đi vào SQL sink. Trên WordPress **6.9.0–6.9.4** và **7.0.0–7.0.1**, nested batch có thể ghép hai primitive thành SQL injection trước xác thực, sau đó mở rộng thành RCE thông qua cache, oEmbed, Customizer và dynamic hooks. Full chain không cần plugin hoặc tương tác của người dùng trên một cài đặt mặc định.
 
-| Thuộc tính | Kết quả đã xác minh |
+| Thuộc tính | Đặc điểm kỹ thuật |
 | --- | --- |
 | Thành phần | WordPress Core |
 | Entry point | REST API Batch `/wp-json/batch/v1` |
 | Điều kiện full chain | Không cần đăng nhập, không cần plugin, không cần tương tác |
 | Phiên bản full chain | 6.9.0–6.9.4; 7.0.0–7.0.1 |
 | Bản sửa | 6.9.5; 7.0.2 |
-| Tình trạng khai thác | CISA ghi nhận `active exploitation` |
 | Tác động cuối | Tạo administrator, sau đó dùng chức năng quản trị để đạt RCE |
-
-> Nếu chỉ cần quyết định vận hành: hãy cập nhật trước, điều tra sau. WordPress đã bật forced auto-update cho các phiên bản bị ảnh hưởng, nhưng quản trị viên vẫn phải xác nhận phiên bản thực tế trên từng site.
-{: .prompt-danger }
 
 ## Phương pháp và nguồn bằng chứng
 
@@ -272,82 +265,6 @@ Hai câu tưởng mâu thuẫn thực ra đang nói về hai phạm vi khác nha
 - “`<= 6.8.5` không bị wp2shell” — đúng khi nói về **full pre-auth RCE chain**.
 - “6.8.0–6.8.5 có CVE-2026-60137” — đúng khi nói về **sink SQLi riêng lẻ**.
 
-## Đánh giá mức độ nghiêm trọng
-
-| Định danh | CNA CVSS | Ý nghĩa |
-| --- | --- | --- |
-| CVE-2026-63030 | 9.8 Critical | Network, low complexity, no auth, no interaction, tác động C/I/A cao |
-| CVE-2026-60137 | 5.9 Medium | SQLi riêng lẻ có attack complexity cao và chủ yếu ảnh hưởng confidentiality |
-
-CISA đánh giá chuỗi thực tế nghiêm trọng hơn primitive SQLi đứng riêng và ghi nhận cả hai CVE trong KEV. Điều này phù hợp với nguyên tắc: **severity của một component bug không mô tả đầy đủ severity khi nó trở thành mắt xích của exploit chain**.
-
-## Phát hiện và điều tra
-
-### Dấu hiệu ở lớp HTTP
-
-Tìm theo chuỗi thời gian, không chỉ theo một IOC đơn lẻ:
-
-- POST ẩn danh tới `/wp-json/batch/v1` hoặc `?rest_route=/batch/v1`;
-- batch chứa nhiều request lồng nhau hoặc path parse lỗi;
-- method bất thường xuất hiện trong batch;
-- response có lỗi validation xen kẽ response của route khác;
-- ngay sau đó xuất hiện request tạo user, đăng nhập administrator hoặc upload plugin.
-
-Một request Batch API không đủ để kết luận compromise vì đây là tính năng hợp lệ. Tín hiệu mạnh hơn là **nested batch + malformed path + thao tác quản trị nối tiếp**.
-
-### Dấu hiệu trên WordPress và filesystem
-
-- user mới có role `administrator`;
-- thay đổi role hoặc mật khẩu không có ticket tương ứng;
-- plugin mới, plugin ZIP hoặc file PHP lạ trong `wp-content/plugins/`;
-- row `oembed_cache` tăng bất thường quanh thời điểm nghi vấn;
-- post/changeset lạ, đặc biệt các bản ghi có quan hệ parent bất thường;
-- web process tạo file hoặc spawn shell;
-- thay đổi ở `wp-config.php`, cron hoặc security salts.
-
-### Nếu nghi ngờ đã bị khai thác
-
-1. Cô lập site hoặc chuyển sang maintenance ở lớp edge.
-2. Lưu access log, PHP log, database snapshot và filesystem image trước khi dọn dẹp.
-3. Thu hồi session, đổi mật khẩu đặc quyền và rotate WordPress salts.
-4. Kiểm tra toàn bộ administrator, plugin, mu-plugin, theme và scheduled task.
-5. Đối chiếu checksum Core; phục hồi từ nguồn sạch nếu không xác định được phạm vi.
-6. Tìm lateral movement từ credential trong `wp-config.php` và database.
-
-## Khắc phục
-
-### Cập nhật Core
-
-- WordPress 7.0 → **7.0.2 hoặc mới hơn**.
-- WordPress 6.9 → **6.9.5 hoặc mới hơn**.
-- WordPress 6.8 → **6.8.6 hoặc mới hơn**.
-
-```bash
-wp core version
-wp core check-update
-wp core verify-checksums
-```
-
-### Biện pháp tạm thời
-
-Nếu chưa thể vá ngay, [Searchlight Cyber](https://slcyber.io/research-center/wp2shell-pre-authentication-rce-in-wordpress-core/) đề xuất chặn anonymous access tới:
-
-```text
-/wp-json/batch/v1
-?rest_route=/batch/v1
-```
-
-Đây chỉ là emergency control vì có thể phá chức năng hợp lệ. WAF cũng không chứng minh site an toàn nếu probe bị chặn; bản vá Core mới khôi phục đúng invariants trong code.
-
-### Hardening dài hạn
-
-- cấm PHP ghi trực tiếp vào code directory nếu quy trình deploy cho phép;
-- đặt `DISALLOW_FILE_MODS` sau khi đánh giá ảnh hưởng update;
-- giới hạn quyền database và quyền filesystem của web user;
-- giám sát web process tạo PHP hoặc spawn child process;
-- đưa malformed-path, nested-batch và cross-route validation vào regression test;
-- lưu route match, validation result và permission decision trong cùng một request object thay vì các mảng song song.
-
 ## Bài học thiết kế
 
 wp2shell hình thành vì nhiều lớp đều tin rằng lớp trước đã giữ đúng contract:
@@ -370,7 +287,7 @@ Bằng chứng từ source và patch cho phép kết luận rõ:
 4. Cache, oEmbed, changeset, cycle repair và dynamic hook biến primitive đọc thành administrator context.
 5. Tài khoản administrator mới mở đường tới plugin upload và RCE.
 
-Với đội vận hành, thứ tự xử lý hợp lý là **xác minh version → vá → săn dấu hiệu compromise → hardening**. Với đội phát triển, bài học lớn nhất là validation chỉ có ý nghĩa khi nó được gắn không thể tách rời với đúng object và đúng handler sẽ tiêu thụ dữ liệu.
+Về mặt thiết kế, bài học lớn nhất là validation chỉ có ý nghĩa khi nó được gắn không thể tách rời với đúng object và đúng handler sẽ tiêu thụ dữ liệu.
 
 ## Tài liệu tham khảo
 
@@ -381,4 +298,3 @@ Với đội vận hành, thứ tự xử lý hợp lý là **xác minh version 
 - [CVE Record: CVE-2026-63030](https://www.cve.org/CVERecord?id=CVE-2026-63030)
 - [CVE Record: CVE-2026-60137](https://www.cve.org/CVERecord?id=CVE-2026-60137)
 - [Searchlight Cyber: technical wp2shell chain](https://slcyber.io/research-center/exploit-brokers-pay-500000-for-a-wordpress-rce-i-found-one-with-gpt5-6/)
-- [Searchlight Cyber: affected versions and mitigation](https://slcyber.io/research-center/wp2shell-pre-authentication-rce-in-wordpress-core/)
