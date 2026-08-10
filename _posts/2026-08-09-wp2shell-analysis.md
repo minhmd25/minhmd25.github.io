@@ -9,6 +9,11 @@ toc: true
 mermaid: true
 ---
 
+## Lời mở đầu 
+Trong giới nghiên cứu bảo mật, việc tìm thấy một lỗ hổng Pre-auth RCE trên WordPress Core mặc định (không phụ thuộc plugin) luôn được coi là lỗi nghiệm trọng rất lớn. Mới đây, chuỗi khai thác wp2shell đã gây xôn xao khi kết hợp hai lỗi tưởng chừng đơn lẻ thành một chuỗi tấn công hoàn chỉnh dẫn đến kết quả RCE nghiêm trọng trên các sản phẩm có sử dụng WordPress.
+
+Trong bài viết này, mình sẽ mổ xẻ source code WordPress Core để xem một lỗi logic trong REST API và một điểm SQLi ẩn mình trong `WP_Query` đã kết hợp với nhau như thế nào.
+
 ## Tóm tắt kỹ thuật
 
 `wp2shell` là một exploit chain kết hợp hai lỗi trong WordPress Core:
@@ -80,7 +85,7 @@ Bất biến bảo mật ở đây là:
 CVE-2026-63030 phá vỡ chính bất biến này.
 
 ## CVE-2026-63030: lệch index giữa validation và handler
-
+Mảnh ghép đầu tiên nằm ở REST API Batch. Câu hỏi đặt ra là: Làm sao để bắt WordPress thực thi dữ liệu chưa qua kiểm duyệt? Câu trả lời nằm ở sự mất đồng bộ index
 ### Code trước bản vá
 
 Trong WordPress 6.9.4, `serve_batch_request_v1()` duy trì hai mảng song song là `$matches` và `$validation`. Khi parser tạo ra một `WP_Error`, code chỉ thêm lỗi vào `$validation` rồi `continue`:
