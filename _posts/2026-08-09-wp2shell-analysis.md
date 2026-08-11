@@ -207,7 +207,7 @@ Kịch bản 2: Kẻ tấn công lợi dụng lỗ hổng (Truyền Chuỗi / Sc
     ```SQL
     AND posts.post_author NOT IN (1) UNION SELECT ... --)
     ```
-$\rightarrow$ SQL Injection thành công!
+=> SQL Injection thành công!
 
 Source gốc nằm tại [`class-wp-query.php` của WordPress 6.9.4](https://github.com/WordPress/wordpress-develop/blob/6.9.4/src/wp-includes/class-wp-query.php#L2403-L2410).
 
@@ -318,34 +318,41 @@ SELECT * FROM wp_posts WHERE ... AND posts.post_author NOT IN (1) UNION SELECT .
 
 ## Từ SQLi chỉ đọc đến RCE
 
-SQLi này không tự động ghi tùy ý vào database. Phần sáng tạo nhất của wp2shell là biến một primitive đọc/fabricate row thành thay đổi trạng thái WordPress.
+Một câu hỏi kỹ thuật quan trọng đặt ra là: **Làm sao biến một lỗ hổng SQL Injection dạng `SELECT` (chỉ đọc) thành RCE hoàn chỉnh?**
 
-Ta sẽ thấy chuỗi hậu khai thác gồm các gadget sau:
+Do WordPress mặc định không cho phép thực thi câu lệnh kép (Stacked Queries dạng `; INSERT...` hay `; UPDATE...`), kẻ tấn công **không thể** chèn trực tiếp tài khoản Admin mới vào database hay dùng `INTO OUTFILE` để ghi file shell.
 
-1. **`WP_Post` trong cache:** UNION-based SQLi tạo các hàng post giả trong cache của request.
-2. **oEmbed cache:** local embed khiến WordPress tạo các row `oembed_cache` thật trong `wp_posts`.
-3. **Cache reconciliation:** cùng một post ID có bản trong database và bản giả trong memory; WordPress cố đồng bộ chúng.
-4. **Cycle repair:** một quan hệ parent tạo chu trình buộc WordPress gọi `wp_update_post()` theo nhánh không ghi đè `post_content`.
-5. **`customize_changeset`:** post giả được diễn giải thành changeset mang `user_id` của administrator; WordPress tạm đặt current user theo ID này để áp dụng thay đổi.
-6. **Dynamic hook:** status và post type giả tạo tên hook `parse_request`, khiến request pipeline được chạy lại khi context administrator vẫn còn hiệu lực.
-7. **Privilege escalation:** sub-request tạo administrator vốn thất bại ở lượt guest sẽ thành công ở lượt replay.
-8. **RCE:** tài khoản administrator mới dùng chức năng upload plugin để đưa PHP lên máy chủ.
+Đây cũng là một điểm rất hay của chỗi tấn công, **wp2shell** sử dụng một kỹ thuật tinh vi hơn: **Trích xuất bí mật để giả mạo quyền Admin (Auth Bypass), sau đó kích hoạt chuỗi Core Gadgets có sẵn trong WordPress.**
 
 ```mermaid
 flowchart TD
-    SQLI["Pre-auth SQLi"] --> MEM["Fabricate WP_Post trong request cache"]
-    MEM --> EMBED["Local oEmbed tạo row cache trong DB"]
-    EMBED --> CYCLE["Parent cycle kích hoạt nhánh repair"]
-    CYCLE --> CHANGE["Forge customize_changeset"]
-    CHANGE --> ADMINCTX["WordPress tạm dùng quyền administrator"]
-    ADMINCTX --> HOOK["Dynamic hook gọi parse_request"]
-    HOOK --> REPLAY["Batch được replay trong admin context"]
-    REPLAY --> USER["Tạo administrator mới"]
-    USER --> PLUGIN["Upload plugin PHP"]
-    PLUGIN --> RCE["Remote Code Execution"]
+    A["<b>SQLi (SELECT)</b>"]
+    
+    A -- "Leak Keys & Session Tokens" --> B["<b>Auth Bypass</b>"]
+    B -.-> B1["Giả mạo Cookie / Nonce Admin"]
+    
+    B -- "Kích hoạt REST API / Endpoints nội bộ" --> C["<b>Core Gadgets</b>"]
+    
+    subgraph Gadgets ["Core Gadgets Flow"]
+        direction LR
+        C1["Transients"] --> C2["oEmbed"] --> C3["Customizer"]
+    end
+    
+    C --> Gadgets
+    Gadgets --> D["<b>Dynamic Hooks</b>"]
+    
+    D --> E["<code>do_action()</code>"]
+    E --> F["<b>Full Pre-auth RCE</b>"]
+
+    %% Custom styling
+    style A fill:#fff3cd,stroke:#ffc107,stroke-width:2px,color:#856404
+    style B fill:#ffeba1,stroke:#ffc107,stroke-width:2px,color:#856404
+    style B1 fill:#e2e3e5,stroke:#6c757d,stroke-width:1px,color:#383d41
+    style C fill:#f8d7da,stroke:#dc3545,stroke-width:2px,color:#721c24
+    style D fill:#f8d7da,stroke:#dc3545,stroke-width:2px,color:#721c24
+    style F fill:#721c24,stroke:#dc3545,stroke-width:2px,color:#ffffff
 ```
 
-Chuỗi này giải thích chính xác vì sao “SQLi đọc” vẫn có thể thành RCE: kẻ tấn công không cần một câu `UPDATE` trực tiếp. Họ lợi dụng cache, oEmbed, Customizer và hook system để WordPress tự thực hiện các lần ghi hợp lệ.
 
 ## Phạm vi ảnh hưởng: cần tách full chain và SQLi riêng lẻ
 
