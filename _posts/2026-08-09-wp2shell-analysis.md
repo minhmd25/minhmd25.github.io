@@ -186,7 +186,7 @@ Source gốc nằm tại [`class-wp-query.php` của WordPress 6.9.4](https://gi
 
 ### Tại sao gọi REST bình thường lại khó chạm sink?
 
-REST Posts Controller công khai tham số `author_exclude` và khai báo nó là **mảng số nguyên**. Trong luồng bình thường:
+Vấn đề là REST Posts Controller công khai tham số `author_exclude` và khai báo nó là **mảng số nguyên**. Trong luồng bình thường:
 
 ```text
 author_exclude
@@ -220,6 +220,8 @@ Xem [source WordPress 6.9.5](https://github.com/WordPress/wordpress-develop/blob
 
 ## Hai lỗi nối thành pre-auth SQLi ra sao?
 
+Đến đây chắc hẳn mọi người cũng có thể tưởng tượng ra cách CVE-2026-63030 và CVE-2026-60137 kết hợp với nhau: route confusion làm lệch validation, rồi Posts handler nhận một scalar chưa chuẩn hóa, và cuối cùng SQLi xảy ra.
+
 Batch API không cho phép mọi method ở mọi tầng. Nhóm nghiên cứu cho thấy một batch lồng nhau có thể tận dụng route confusion hai lần:
 
 1. tầng ngoài làm lệch validation của trường method;
@@ -244,7 +246,7 @@ Sơ đồ trên cố ý dừng ở primitive và không biểu diễn payload. �
 
 SQLi này không tự động ghi tùy ý vào database. Phần sáng tạo nhất của wp2shell là biến một primitive đọc/fabricate row thành thay đổi trạng thái WordPress.
 
-Theo [phân tích của Searchlight Cyber](https://slcyber.io/research-center/exploit-brokers-pay-500000-for-a-wordpress-rce-i-found-one-with-gpt5-6/), chuỗi hậu khai thác gồm các gadget sau:
+Ta sẽ thấy chuỗi hậu khai thác gồm các gadget sau:
 
 1. **`WP_Post` trong cache:** UNION-based SQLi tạo các hàng post giả trong cache của request.
 2. **oEmbed cache:** local embed khiến WordPress tạo các row `oembed_cache` thật trong `wp_posts`.
@@ -314,7 +316,6 @@ Về mặt thiết kế, bài học lớn nhất là validation chỉ có ý ngh
 
 ## Tài liệu tham khảo
 
-- [Ghi chú nghiên cứu gốc trên Notion](https://app.notion.com/p/3aa5190c466980eba49aefbd0a2bd62e)
 - [WordPress 7.0.2 Security Release](https://wordpress.org/news/2026/07/wordpress-7-0-2-release/)
 - [GHSA-ff9f-jf42-662q / CVE-2026-63030](https://github.com/WordPress/wordpress-develop/security/advisories/GHSA-ff9f-jf42-662q)
 - [GHSA-fpp7-x2x2-2mjf / CVE-2026-60137](https://github.com/WordPress/wordpress-develop/security/advisories/GHSA-fpp7-x2x2-2mjf)
