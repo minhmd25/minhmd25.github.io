@@ -78,11 +78,11 @@ sequenceDiagram
     B-->>C: Danh sách response
 ```
 
-Bất biến bảo mật ở đây là:
+Tính bất biến ở đây là:
 
 > `request[i]`, `validation[i]` và `handler[i]` phải luôn nói về cùng một sub-request.
 
-CVE-2026-63030 phá vỡ chính bất biến này.
+CVE-2026-63030 phá vỡ chính tính bất biến này.
 
 ## CVE-2026-63030: lệch index giữa validation và handler
 Mảnh ghép đầu tiên nằm ở REST API Batch. Câu hỏi đặt ra là: Làm sao để bắt WordPress thực thi dữ liệu chưa qua kiểm duyệt? Câu trả lời nằm ở sự mất đồng bộ index
@@ -115,14 +115,28 @@ Vòng thực thi thứ hai bỏ qua A vì nó là lỗi. Tại index 1, WordPres
 
 ```mermaid
 flowchart LR
-    A["Request A: malformed"] --> VA["validation[0]: lỗi A"]
-    A -.->|không thêm phần tử| GAP["matches thiếu A"]
-    B["Request B"] --> VB["validation[1]: hợp lệ theo B"]
-    B --> MB["matches[0]: handler B"]
-    C["Request C"] --> VC["validation[2]: hợp lệ theo C"]
-    C --> MC["matches[1]: handler C"]
-    VB ==>|cùng index 1| MC
-    MC --> X["B được thực thi bởi handler C"]
+    subgraph R["requests / validation"]
+        direction TB
+        A["index 0<br/>Request A — parse error"]
+        B["index 1<br/>Request B"]
+        C["index 2<br/>Request C"]
+    end
+
+    subgraph M["matches"]
+        direction TB
+        MB["index 0<br/>Handler B"]
+        MC["index 1<br/>Handler C"]
+        EMPTY["index 2<br/>không tồn tại"]
+    end
+
+    A --- MB
+    B --- MC
+    C -.- EMPTY
+
+    classDef error fill:#2b2415,stroke:#d4a72c,color:#f0c75e,stroke-width:2px
+    classDef missing fill:transparent,stroke:#777,color:#aaa,stroke-width:2px,stroke-dasharray:6 4
+    class A error
+    class EMPTY missing
 ```
 
 Đây không đơn thuần là “quên permission check”. Permission callback vẫn chạy, nhưng nó chạy trong **ngữ cảnh đã bị ghép sai**.
