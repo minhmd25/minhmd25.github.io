@@ -206,7 +206,7 @@ Kịch bản 2: Kẻ tấn công lợi dụng lỗ hổng (Truyền Chuỗi / Sc
     ```SQL
     AND posts.post_author NOT IN (1) UNION SELECT ... --)
     ```
-    - $\rightarrow$ SQL Injection thành công!
+$\rightarrow$ SQL Injection thành công!
 
 Source gốc nằm tại [`class-wp-query.php` của WordPress 6.9.4](https://github.com/WordPress/wordpress-develop/blob/6.9.4/src/wp-includes/class-wp-query.php#L2403-L2410).
 
