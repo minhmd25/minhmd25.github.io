@@ -196,7 +196,7 @@ Kịch bản 1: Đúng như lập trình viên mong đợi (Truyền Mảng)
     2. `array_map('absint', ...)` hoạt động: Chuỗi `"3' OR 1=1"` bị ép thành số integer `3`.
     3. `$ids` trở thành `"1,2,3"`.
     4. Câu SQL thu được: `AND posts.post_author NOT IN (1,2,3)` $\rightarrow$ An toàn!
-    
+
 Kịch bản 2: Kẻ tấn công lợi dụng lỗ hổng (Truyền Chuỗi / Scalar String)
 - Đầu vào (Input): `author__not_in = "1) UNION SELECT ... --"` (chuỗi ký tự, không phải mảng)
 - Xử lý:
@@ -251,25 +251,58 @@ Xem [source WordPress 6.9.5](https://github.com/WordPress/wordpress-develop/blob
 
 Đến đây chắc hẳn mọi người cũng có thể tưởng tượng ra cách CVE-2026-63030 và CVE-2026-60137 kết hợp với nhau: route confusion làm lệch validation, rồi Posts handler nhận một scalar chưa chuẩn hóa, và cuối cùng SQLi xảy ra.
 
-Batch API không cho phép mọi method ở mọi tầng. Nhóm nghiên cứu cho thấy một batch lồng nhau có thể tận dụng route confusion hai lần:
+### 1. Ý tưởng cốt lõi
 
-1. tầng ngoài làm lệch validation của trường method;
-2. tầng trong làm lệch validation của `author_exclude`;
-3. Posts handler cuối cùng nhận một scalar thay vì mảng integer;
-4. `WP_Query` ghép scalar đó vào `NOT IN (...)`.
+Có thể hình dung hai CVE đảm nhận hai vai trò khác nhau:
+
+- **CVE-2026-63030 là “kẻ tráo hồ sơ”:** Request B được kiểm tra theo schema của Route B, nhưng do `$matches` lệch index, chính dữ liệu của B lại được chuyển cho Handler C xử lý.
+- **CVE-2026-60137 là “điểm nổ”:** Handler C cuối cùng gọi `WP_Query`. Hàm này tin rằng caller đã tuân thủ contract và truyền một danh sách ID, nên khi nhận scalar chưa chuẩn hóa, nó có thể ghép dữ liệu đó vào câu SQL.
+
+Nói ngắn gọn: lỗi thứ nhất đưa một gói dữ liệu tới sai handler; lỗi thứ hai biến sự nhầm lẫn đó thành SQL injection.
+
+### 2. Kịch bản từng bước
+
+Từ phía client, toàn bộ chuỗi bắt đầu bằng **một HTTP POST ẩn danh** tới `/wp-json/batch/v1`. Tuy nhiên, body không chỉ là một batch phẳng gồm A, B và C. Do Batch API giới hạn method ở từng tầng, exploit phải đặt một **inner batch** bên trong **outer batch** và tận dụng route confusion hai lần.
+
+#### Bước 1 — Outer batch mở đường cho inner batch
+
+Tầng ngoài làm lệch phần kiểm tra method. Kết quả là inner batch được dispatch trong một context mà luồng validation bình thường không cho phép.
+
+#### Bước 2 — Inner batch tạo cặp Request B / Handler C
+
+Ở tầng trong, có thể dùng mô hình A–B–C để theo dõi sự dịch chuyển:
+
+- **Request A — mồi lệch index:** cố tình malformed để parser trả về `WP_Error`. Lỗi được thêm vào `$validation`, nhưng code cũ không thêm phần tử tương ứng vào `$matches`.
+- **Request B — dữ liệu:** mang scalar do attacker kiểm soát. Dữ liệu này được kiểm tra trong context của Route B, nơi schema không áp đặt contract mảng số nguyên của `author_exclude`.
+- **Request C — đích đến:** match với Posts collection route, vì vậy phần tử tương ứng trong `$matches` chứa Handler C — handler cuối cùng gọi `WP_Query`.
+
+Sau vòng match và validation, hai mảng không còn cùng ý nghĩa tại mỗi index:
+
+| Index | `$validation` | `$matches` |
+| --- | --- | --- |
+| 0 | `WP_Error` của A | Handler B |
+| 1 | Validation thành công của B | Handler C — Posts collection |
+| 2 | Validation của C | Không tồn tại |
+
+#### Bước 3 — WordPress ghép nhầm context khi thực thi
+
+Tại index 0, `WP_Error` khiến Request A bị bỏ qua. Đến index 1, WordPress lấy **Request B + validation của B**, nhưng dispatch bằng **Handler C**. Dữ liệu hợp lệ đối với Route B vì thế được tiêu thụ theo contract hoàn toàn khác của Posts handler.
+
+#### Bước 4 — Scalar chạm tới SQL sink
+
+Posts handler chuyển tham số sang `author__not_in` rồi gọi `WP_Query`. Do CVE-2026-60137, scalar không đi qua `array_map( 'absint', ... )` và được ghép vào `NOT IN (...)`. Kết quả cuối cùng là SQL injection trước xác thực.
 
 ```mermaid
 flowchart TD
-    U["Anonymous HTTP request"] --> O["Outer REST batch"]
-    O --> D1["Desync route và method validation"]
-    D1 --> I["Inner REST batch"]
-    I --> D2["Desync schema của author_exclude"]
-    D2 --> H["Posts collection handler"]
-    H --> Q["WP_Query author__not_in"]
+    U["Một HTTP POST ẩn danh"] --> O["Outer batch<br/>lệch kiểm tra method"]
+    O --> I["Inner batch<br/>xếp Request A / B / C"]
+    I --> D["validation[1] thuộc B<br/>matches[1] là Handler C"]
+    D --> H["Posts handler nhận dữ liệu của B"]
+    H --> Q["WP_Query nhận author__not_in dạng scalar"]
     Q --> S["Pre-auth SQL Injection"]
 ```
 
-Sơ đồ trên cố ý dừng ở primitive và không biểu diễn payload. Điều cần chứng minh là **input đã được kiểm tra ở context A nhưng được tiêu thụ ở context B**, rồi đi vào một sink không tự bảo vệ.
+Điểm cốt lõi không nằm ở một payload cụ thể mà ở việc **input được kiểm tra trong context B nhưng lại được tiêu thụ trong context C**, rồi đi vào một sink không tự chuẩn hóa dữ liệu.
 
 ## Từ SQLi chỉ đọc đến RCE
 
