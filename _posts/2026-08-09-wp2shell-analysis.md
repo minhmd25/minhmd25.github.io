@@ -322,7 +322,7 @@ Một câu hỏi kỹ thuật quan trọng đặt ra là: **Làm sao biến mộ
 
 Do WordPress mặc định không cho phép thực thi câu lệnh kép (Stacked Queries dạng `; INSERT...` hay `; UPDATE...`), kẻ tấn công **không thể** chèn trực tiếp tài khoản Admin mới vào database hay dùng `INTO OUTFILE` để ghi file shell.
 
-Đây cũng là một điểm rất hay của chỗi tấn công, **wp2shell** sử dụng một kỹ thuật tinh vi hơn: **Trích xuất bí mật để giả mạo quyền Admin (Auth Bypass), sau đó kích hoạt chuỗi Core Gadgets có sẵn trong WordPress.**
+Đây cũng là một điểm rất hay của chỗi tấn công, **wp2shell** sử dụng một kỹ thuật tinh vi hơn: **Trích xuất secret để giả mạo quyền Admin (Auth Bypass), sau đó kích hoạt chuỗi Core Gadgets có sẵn trong WordPress.**
 
 ```mermaid
 flowchart TD
@@ -353,8 +353,38 @@ flowchart TD
     style F fill:#721c24,stroke:#dc3545,stroke-width:2px,color:#ffffff
 ```
 
+---
 
-## Phạm vi ảnh hưởng: cần tách full chain và SQLi riêng lẻ
+### Bước 1: Trích xuất secret và giả mạo phiên Admin (Auth Bypass)
+
+Kẻ tấn công khai thác lỗ hổng SQLi dạng `SELECT` để rút các dữ liệu nhạy cảm nằm trong bảng `wp_options` và `wp_users`:
+* **Secret Keys:** Các khóa bí mật hệ thống như `AUTH_KEY`, `SECURE_AUTH_KEY`, `LOGGED_IN_KEY`.
+* **Session Tokens & Nonces:** Chuỗi định danh phiên làm việc và nonce bảo mật của các tài khoản Administrator đang hoạt động.
+
+Có trong tay các khóa bí mật này, kẻ tấn công tự tính toán và tạo ra **Session Cookie / Nonce hợp lệ**. Hệ thống WordPress lập tức xác thực request là từ **Administrator** mà kẻ tấn công không cần biết mật khẩu thật hay phải tạo user mới.
+
+---
+
+### Bước 2: Kích hoạt chuỗi Core Gadgets (Không cần Upload Plugin)
+
+Thông thường, khi đã có quyền Admin, cách RCE phổ biến nhất là upload plugin `.zip` chứa webshell hoặc sửa file Theme. Tuy nhiên, các máy chủ hardened thường bật cờ `DISALLOW_FILE_MODS` hoặc `DISALLOW_FILE_EDIT` để chặn thao tác này.
+
+Chuỗi **wp2shell** vượt qua hạn chế đó bằng cách kết nối 4 thành phần nội tại (**Core Primitives**) hoàn toàn mặc định của WordPress:
+
+1. **Transients & State Manipulation:**
+   Dùng thông tin trích xuất từ SQLi để thao tác với các trạng thái tạm (`_transient_`) trong `wp_options`, chuẩn bị dữ liệu đầu vào cho các bộ xử lý ngầm.
+
+2. **oEmbed Subsystem (`/wp-json/oembed/1.0/embed`):**
+   Tận dụng cơ chế nhúng link tự động của WordPress. Bằng cách can thiệp vào luồng oEmbed, kẻ tấn công bypass các bước kiểm tra URL an toàn và ghi dữ liệu kiểm soát vào bộ nhớ cache của hệ thống.
+
+3. **Theme Customizer API (`/wp-admin/customize.php`):**
+   Tính năng xem trước giao diện (Customizer) cho phép gọi các hàm callback để render preview theo thời gian thực. Truyền các tham số động (dynamic settings) đã được chuẩn bị sẵn vào Customizer để ép WordPress kích hoạt các luồng xử lý dữ liệu nâng cao.
+
+4. **Dynamic Hooks (`do_action` / `apply_filters`) — Điểm nổ RCE:**
+   Khi Customizer và oEmbed kết hợp xử lý, chúng kích hoạt các chuỗi Action/Filter Hook động. Vì tham số và tên hook đã bị kẻ tấn công kiểm soát thông qua các bước trước, hệ thống tự động gọi hàm thực thi code tùy ý $\rightarrow$ **Đạt Full Remote Code Execution (RCE)**.
+
+
+## Phạm vi ảnh hưởng: full chain và SQLi riêng lẻ
 
 | Phiên bản | Trạng thái |
 | --- | --- |
@@ -366,10 +396,6 @@ flowchart TD
 | 7.0.0–7.0.1 | Bị ảnh hưởng bởi full wp2shell chain |
 | 7.0.2+ | Đã vá cả hai primitive của nhánh 7.0 |
 
-Hai câu tưởng mâu thuẫn thực ra đang nói về hai phạm vi khác nhau:
-
-- “`<= 6.8.5` không bị wp2shell” — đúng khi nói về **full pre-auth RCE chain**.
-- “6.8.0–6.8.5 có CVE-2026-60137” — đúng khi nói về **sink SQLi riêng lẻ**.
 
 ## Bài học thiết kế
 
@@ -383,17 +409,6 @@ wp2shell hình thành vì nhiều lớp đều tin rằng lớp trước đã gi
 
 Không lớp nào một mình “tạo RCE”. RCE xuất hiện khi các trust boundary này được nối lại theo một đường mà kiến trúc sư không dự kiến.
 
-## Kết luận
-
-Bằng chứng từ source và patch cho phép kết luận rõ:
-
-1. CVE-2026-63030 làm `$matches` và `$validation` lệch index.
-2. CVE-2026-60137 để scalar `author__not_in` đi vào SQL.
-3. Nested batch nối route confusion tới SQLi trước xác thực.
-4. Cache, oEmbed, changeset, cycle repair và dynamic hook biến primitive đọc thành administrator context.
-5. Tài khoản administrator mới mở đường tới plugin upload và RCE.
-
-Về mặt thiết kế, bài học lớn nhất là validation chỉ có ý nghĩa khi nó được gắn không thể tách rời với đúng object và đúng handler sẽ tiêu thụ dữ liệu.
 
 ## Tài liệu tham khảo
 
