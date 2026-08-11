@@ -114,29 +114,37 @@ Nếu request đầu tiên lỗi:
 Vòng thực thi thứ hai bỏ qua A vì nó là lỗi. Tại index 1, WordPress lấy **request B + validation B**, nhưng lại dùng **handler C**. Dữ liệu đã được kiểm tra theo schema của một route có thể được thực thi trong route khác.
 
 ```mermaid
-flowchart LR
-    subgraph R["requests / validation"]
-        direction TB
-        A["index 0<br/>Request A — parse error"]
-        B["index 1<br/>Request B"]
-        C["index 2<br/>Request C"]
+flowchart TB
+    subgraph HEAD[" "]
+        direction LR
+        LEFT["requests / validation"] ~~~ RIGHT["matches"]
     end
 
-    subgraph M["matches"]
-        direction TB
-        MB["index 0<br/>Handler B"]
-        MC["index 1<br/>Handler C"]
-        EMPTY["index 2<br/>không tồn tại"]
+    subgraph ROW0[" "]
+        direction LR
+        A["index 0<br/>Request A — parse error"] --- MB["index 0<br/>Handler B"]
     end
 
-    A --- MB
-    B --- MC
-    C -.- EMPTY
+    subgraph ROW1[" "]
+        direction LR
+        B["index 1<br/>Request B"] --- MC["index 1<br/>Handler C"]
+    end
 
+    subgraph ROW2[" "]
+        direction LR
+        C["index 2<br/>Request C"] -.- EMPTY["index 2<br/>không tồn tại"]
+    end
+
+    classDef header fill:transparent,stroke:transparent,font-weight:bold
     classDef error fill:#2b2415,stroke:#d4a72c,color:#f0c75e,stroke-width:2px
     classDef missing fill:transparent,stroke:#777,color:#aaa,stroke-width:2px,stroke-dasharray:6 4
+    class LEFT,RIGHT header
     class A error
     class EMPTY missing
+    style HEAD fill:transparent,stroke:transparent
+    style ROW0 fill:transparent,stroke:transparent
+    style ROW1 fill:transparent,stroke:transparent
+    style ROW2 fill:transparent,stroke:transparent
 ```
 
 Đây không đơn thuần là “quên permission check”. Permission callback vẫn chạy, nhưng nó chạy trong **ngữ cảnh đã bị ghép sai**.
