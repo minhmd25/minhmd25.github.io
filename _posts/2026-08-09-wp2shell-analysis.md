@@ -113,6 +113,8 @@ Nếu request đầu tiên lỗi:
 
 Vòng thực thi thứ hai bỏ qua A vì nó là lỗi. Tại index 1, WordPress lấy **request B + validation B**, nhưng lại dùng **handler C**. Dữ liệu đã được kiểm tra theo schema của một route có thể được thực thi trong route khác.
 
+Có thể  tưởng tượng như khi xếp hàng khám bệnh: Y tá phát phiếu kiểm tra cho 3 người A, B, C. Người A bị thiếu hồ sơ nên bị loại ra, nhưng y tá lại quên không rút số thứ tự của A ra khỏi danh sách chờ gặp Bác sĩ. Kết quả là Bác sĩ lấy hồ sơ khám của bệnh nhân B nhưng lại áp dụng đơn thuốc/quy trình cho bệnh nhân C.
+
 ```mermaid
 flowchart TB
     subgraph HEAD[" "]
