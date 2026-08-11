@@ -195,12 +195,12 @@ Kịch bản 1: Đúng như lập trình viên mong đợi (Truyền Mảng)
     1. `is_array()` trả về  `TRUE`.
     2. `array_map('absint', ...)` hoạt động: Chuỗi `"3' OR 1=1"` bị ép thành số integer `3`.
     3. `$ids` trở thành `"1,2,3"`.
-    4. Câu SQL thu được: `AND posts.post_author NOT IN (1,2,3)` $\rightarrow$ An toàn!
+    4. Câu SQL thu được: `AND posts.post_author NOT IN (1,2,3)` => An toàn!
 
 Kịch bản 2: Kẻ tấn công lợi dụng lỗ hổng (Truyền Chuỗi / Scalar String)
 - Đầu vào (Input): `author__not_in = "1) UNION SELECT ... --"` (chuỗi ký tự, không phải mảng)
 - Xử lý:
-    1. `is_array()` trả về  `FALSE` $\rightarrow$ Bỏ qua toàn bộ bước làm sạch `absint`!
+    1. `is_array()` trả về  `FALSE` => Bỏ qua toàn bộ bước làm sạch `absint`!
     2. Ép kiểu `(array) "1) UNION SELECT ... --"` biến chuỗi này thành một mảng chứa 1 phần tử: `["1) UNION SELECT ... --"]`.
     3. `implode()` nối mảng ra lại đúng chuỗi độc hại ban đầu: `"1) UNION SELECT ... --"`.
     4. Ghép thẳng vào SQL:
@@ -226,7 +226,7 @@ author_exclude
 Vì vậy attacker không thể gửi một scalar string độc hại thẳng từ REST API vào `author__not_in` trong luồng bình thường. CVE-2026-60137 được gọi là *facilitated SQL injection* vì nó cần một caller khác phá vỡ contract dữ liệu — chẳng hạn plugin hoặc theme chuyển input không tin cậy trực tiếp vào `WP_Query`.
 
 Điểm mấu chốt ở đây:
-Nhờ có CVE-2026-63030 (lỗi lệch index mảng trong REST API Batch ở đoạn trên), ta mới **đánh tráo** được luồng kiểm duyệt: làm cho bộ gác cửa REST API kiểm tra dữ liệu của đường dẫn A, nhưng lại chuyển dữ liệu chưa lọc đó cho đường dẫn B xử lý $\rightarrow$ Dữ liệu chuỗi độc hại lọt thẳng xuống điểm chết trong WP_Query.
+Nhờ có CVE-2026-63030 (lỗi lệch index mảng trong REST API Batch ở đoạn trên), ta mới **đánh tráo** được luồng kiểm duyệt: làm cho bộ gác cửa REST API kiểm tra dữ liệu của đường dẫn A, nhưng lại chuyển dữ liệu chưa lọc đó cho đường dẫn B xử lý => Dữ liệu chuỗi độc hại lọt thẳng xuống điểm chết trong WP_Query.
 
 
 ### Bản vá tại sink
