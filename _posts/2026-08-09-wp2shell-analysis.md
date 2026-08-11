@@ -381,7 +381,7 @@ Chuỗi **wp2shell** vượt qua hạn chế đó bằng cách kết nối 4 th�
    Tính năng xem trước giao diện (Customizer) cho phép gọi các hàm callback để render preview theo thời gian thực. Truyền các tham số động (dynamic settings) đã được chuẩn bị sẵn vào Customizer để ép WordPress kích hoạt các luồng xử lý dữ liệu nâng cao.
 
 4. **Dynamic Hooks (`do_action` / `apply_filters`) — Điểm nổ RCE:**
-   Khi Customizer và oEmbed kết hợp xử lý, chúng kích hoạt các chuỗi Action/Filter Hook động. Vì tham số và tên hook đã bị kẻ tấn công kiểm soát thông qua các bước trước, hệ thống tự động gọi hàm thực thi code tùy ý $\rightarrow$ **Đạt Full Remote Code Execution (RCE)**.
+   Khi Customizer và oEmbed kết hợp xử lý, chúng kích hoạt các chuỗi Action/Filter Hook động. Vì tham số và tên hook đã bị kẻ tấn công kiểm soát thông qua các bước trước, hệ thống tự động gọi hàm thực thi code tùy ý => **Đạt Full Remote Code Execution (RCE)**.
 
 
 ## Phạm vi ảnh hưởng: full chain và SQLi riêng lẻ
