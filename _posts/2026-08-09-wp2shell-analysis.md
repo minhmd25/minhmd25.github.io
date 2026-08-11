@@ -190,16 +190,29 @@ Nếu giá trị là scalar string, nhánh ép kiểu bị bỏ qua. Cast `(arra
 Chính sơ hở này đã cho phép món đồ nguy hiểm (mã độc SQL) lọt qua kiểm duyệt!
 
 Kịch bản 1: Đúng như lập trình viên mong đợi (Truyền Mảng)
-- Đầu vào (Input): author__not_in = [1, 2, "3' OR 1=1"]
+- Đầu vào (Input): `author__not_in = [1, 2, "3' OR 1=1"]`
 - Xử lý:
- - is_array() trả về TRUE.array_map('absint', ...) hoạt động: Chuỗi "3' OR 1=1" bị ép thành số integer 3.$ids trở thành "1,2,3".Câu SQL thu được: AND posts.post_author NOT IN (1,2,3) $\rightarrow$ An toàn!Kịch bản 2: Kẻ tấn công lợi dụng lỗ hổng (Truyền Chuỗi / Scalar String)Đầu vào (Input): author__not_in = "1) UNION SELECT ... --" (chuỗi ký tự, không phải mảng)Xử lý:is_array() trả về FALSE $\rightarrow$ Bỏ qua toàn bộ bước làm sạch absint!Ép kiểu (array) "1) UNION SELECT ... --" biến chuỗi này thành một mảng chứa 1 phần tử: ["1) UNION SELECT ... --"].implode() nối mảng ra lại đúng chuỗi độc hại ban đầu: "1) UNION SELECT ... --".Ghép thẳng vào SQL:SQLAND posts.post_author NOT IN (1) UNION SELECT ... --)
-$\rightarrow$ SQL Injection thành công!
+    1. `is_array()` trả về  `TRUE`.
+    2. `array_map('absint', ...)` hoạt động: Chuỗi `"3' OR 1=1"` bị ép thành số integer `3`.
+    3. `$ids` trở thành `"1,2,3"`.
+    4. Câu SQL thu được: `AND posts.post_author NOT IN (1,2,3)` $\rightarrow$ An toàn!
+Kịch bản 2: Kẻ tấn công lợi dụng lỗ hổng (Truyền Chuỗi / Scalar String)
+- Đầu vào (Input): `author__not_in = "1) UNION SELECT ... --"` (chuỗi ký tự, không phải mảng)
+- Xử lý:
+    1. `is_array()` trả về  `FALSE` $\rightarrow$ Bỏ qua toàn bộ bước làm sạch `absint`!
+    2. Ép kiểu `(array) "1) UNION SELECT ... --"` biến chuỗi này thành một mảng chứa 1 phần tử: `["1) UNION SELECT ... --"]`.
+    3. `implode()` nối mảng ra lại đúng chuỗi độc hại ban đầu: `"1) UNION SELECT ... --"`.
+    4. Ghép thẳng vào SQL:
+    ```SQL
+    AND posts.post_author NOT IN (1) UNION SELECT ... --)
+    ```
+    - $\rightarrow$ SQL Injection thành công!
 
 Source gốc nằm tại [`class-wp-query.php` của WordPress 6.9.4](https://github.com/WordPress/wordpress-develop/blob/6.9.4/src/wp-includes/class-wp-query.php#L2403-L2410).
 
-### Tại sao gọi REST bình thường lại khó chạm sink?
+### Vì sao REST API bình thường chưa khai thác được lỗi này?
 
-Vấn đề là REST Posts Controller công khai tham số `author_exclude` và khai báo nó là **mảng số nguyên**. Trong luồng bình thường:
+Nếu đứng một mình, lỗi trong `WP_Query` chưa đủ để tạo SQL injection trước xác thực qua REST API mặc định của WordPress. Khi một request đi vào endpoint như `/wp-json/wp/v2/posts`, REST Posts Controller đóng vai trò lớp gác cửa: tham số `author_exclude` bắt buộc phải là **mảng số nguyên**, sau đó từng phần tử được kiểm tra và làm sạch trước khi chuyển xuống `WP_Query`.
 
 ```text
 author_exclude
@@ -209,9 +222,11 @@ author_exclude
     → WP_Query
 ```
 
-Vì vậy, CVE-2026-60137 được gọi là *facilitated SQL injection*: trên WordPress 6.8, thường phải có plugin hoặc theme chuyển input không tin cậy trực tiếp vào `WP_Query`.
+Vì vậy attacker không thể gửi một scalar string độc hại thẳng từ REST API vào `author__not_in` trong luồng bình thường. CVE-2026-60137 được gọi là *facilitated SQL injection* vì nó cần một caller khác phá vỡ contract dữ liệu — chẳng hạn plugin hoặc theme chuyển input không tin cậy trực tiếp vào `WP_Query`.
 
-Trên 6.9+, CVE-2026-63030 cho phép dữ liệu được validate bởi route không biết đến `author_exclude` nhưng lại được thực thi bởi Posts collection handler. Lớp bảo vệ REST vì thế không còn che được sink SQLi.
+Điểm mấu chốt ở đây:
+Nhờ có CVE-2026-63030 (lỗi lệch index mảng trong REST API Batch ở đoạn trên), ta mới **đánh tráo** được luồng kiểm duyệt: làm cho bộ gác cửa REST API kiểm tra dữ liệu của đường dẫn A, nhưng lại chuyển dữ liệu chưa lọc đó cho đường dẫn B xử lý $\rightarrow$ Dữ liệu chuỗi độc hại lọt thẳng xuống điểm chết trong WP_Query.
+
 
 ### Bản vá tại sink
 
