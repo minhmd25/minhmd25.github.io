@@ -249,60 +249,72 @@ Xem [source WordPress 6.9.5](https://github.com/WordPress/wordpress-develop/blob
 
 ## Hai lỗi nối thành pre-auth SQLi ra sao?
 
-Đến đây chắc hẳn mọi người cũng có thể tưởng tượng ra cách CVE-2026-63030 và CVE-2026-60137 kết hợp với nhau: route confusion làm lệch validation, rồi Posts handler nhận một scalar chưa chuẩn hóa, và cuối cùng SQLi xảy ra.
+Đến đây chắc hẳn mọi người cũng có thể tưởng tượng ra cách CVE-2026-63030 và CVE-2026-60137 kết hợp với nhau: route confusion làm lệch validation, rồi Posts handler nhận một chuỗi chưa chuẩn hóa, và cuối cùng SQLi xảy ra.
 
 ### 1. Ý tưởng cốt lõi
 
 Có thể hình dung hai CVE đảm nhận hai vai trò khác nhau:
 
 - **CVE-2026-63030 là “kẻ tráo hồ sơ”:** Request B được kiểm tra theo schema của Route B, nhưng do `$matches` lệch index, chính dữ liệu của B lại được chuyển cho Handler C xử lý.
-- **CVE-2026-60137 là “điểm nổ”:** Handler C cuối cùng gọi `WP_Query`. Hàm này tin rằng caller đã tuân thủ contract và truyền một danh sách ID, nên khi nhận scalar chưa chuẩn hóa, nó có thể ghép dữ liệu đó vào câu SQL.
+- **CVE-2026-60137 là “điểm nổ”:** Handler C cuối cùng gọi `WP_Query`. Hàm này tin rằng caller đã tuân thủ contract và truyền một danh sách ID, nên khi nhận chuỗi chưa chuẩn hóa, nó có thể ghép dữ liệu đó vào câu SQL.
 
 Nói ngắn gọn: lỗi thứ nhất đưa một gói dữ liệu tới sai handler; lỗi thứ hai biến sự nhầm lẫn đó thành SQL injection.
 
-### 2. Kịch bản từng bước
+### 2. Kịch bản khai thác từng bước
 
-Từ phía client, toàn bộ chuỗi bắt đầu bằng **một HTTP POST ẩn danh** tới `/wp-json/batch/v1`. Tuy nhiên, body không chỉ là một batch phẳng gồm A, B và C. Do Batch API giới hạn method ở từng tầng, exploit phải đặt một **inner batch** bên trong **outer batch** và tận dụng route confusion hai lần.
-
-#### Bước 1 — Outer batch mở đường cho inner batch
-
-Tầng ngoài làm lệch phần kiểm tra method. Kết quả là inner batch được dispatch trong một context mà luồng validation bình thường không cho phép.
-
-#### Bước 2 — Inner batch tạo cặp Request B / Handler C
-
-Ở tầng trong, có thể dùng mô hình A–B–C để theo dõi sự dịch chuyển:
-
-- **Request A — mồi lệch index:** cố tình malformed để parser trả về `WP_Error`. Lỗi được thêm vào `$validation`, nhưng code cũ không thêm phần tử tương ứng vào `$matches`.
-- **Request B — dữ liệu:** mang scalar do attacker kiểm soát. Dữ liệu này được kiểm tra trong context của Route B, nơi schema không áp đặt contract mảng số nguyên của `author_exclude`.
-- **Request C — đích đến:** match với Posts collection route, vì vậy phần tử tương ứng trong `$matches` chứa Handler C — handler cuối cùng gọi `WP_Query`.
-
-Sau vòng match và validation, hai mảng không còn cùng ý nghĩa tại mỗi index:
-
-| Index | `$validation` | `$matches` |
-| --- | --- | --- |
-| 0 | `WP_Error` của A | Handler B |
-| 1 | Validation thành công của B | Handler C — Posts collection |
-| 2 | Validation của C | Không tồn tại |
-
-#### Bước 3 — WordPress ghép nhầm context khi thực thi
-
-Tại index 0, `WP_Error` khiến Request A bị bỏ qua. Đến index 1, WordPress lấy **Request B + validation của B**, nhưng dispatch bằng **Handler C**. Dữ liệu hợp lệ đối với Route B vì thế được tiêu thụ theo contract hoàn toàn khác của Posts handler.
-
-#### Bước 4 — Scalar chạm tới SQL sink
-
-Posts handler chuyển tham số sang `author__not_in` rồi gọi `WP_Query`. Do CVE-2026-60137, scalar không đi qua `array_map( 'absint', ... )` và được ghép vào `NOT IN (...)`. Kết quả cuối cùng là SQL injection trước xác thực.
+Kẻ tấn công chỉ cần gửi **01 HTTP POST** Request duy nhất tới đường dẫn Batch REST API (`/wp-json/batch/v1`), bên trong chứa một mảng gồm 3 sub-request:
 
 ```mermaid
-flowchart TD
-    U["Một HTTP POST ẩn danh"] --> O["Outer batch<br/>lệch kiểm tra method"]
-    O --> I["Inner batch<br/>xếp Request A / B / C"]
-    I --> D["validation[1] thuộc B<br/>matches[1] là Handler C"]
-    D --> H["Posts handler nhận dữ liệu của B"]
-    H --> Q["WP_Query nhận author__not_in dạng scalar"]
-    Q --> S["Pre-auth SQL Injection"]
+flowchart LR
+    A["Sub-request A<br/><b>(Bẫy)</b>"] --> B["Sub-request B<br/><b>(Mã độc)</b>"] --> C["Sub-request C<br/><b>(Đích đến)</b>"]
+
+    %% Tùy chỉnh màu sắc tùy chọn cho trực quan hơn
+    style A fill:#fff3cd,stroke:#ffc107,stroke-width:2px,color:#856404
+    style B fill:#f8d7da,stroke:#dc3545,stroke-width:2px,color:#721c24
+    style C fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#155724
 ```
 
-Điểm cốt lõi không nằm ở một payload cụ thể mà ở việc **input được kiểm tra trong context B nhưng lại được tiêu thụ trong context C**, rồi đi vào một sink không tự chuẩn hóa dữ liệu.
+#### Bước 1 — Chuẩn bị 3 sub-request
+
+1. Sub-request A (Mồi bẫy): Cố tình viết sai định dạng (malformed JSON) để hệ thống tạo ra lỗi `WP_Error`.
+
+2. Sub-request B (Gói chứa mã độc): Nhắm vào Route B (một đường dẫn cho phép truyền chuỗi ký tự tự do, ví dụ tham số tìm kiếm). Đường dẫn này sẽ duyệt qua bài kiểm tra Validation vì chuỗi SQLi `"1) UNION SELECT..."` hoàn toàn hợp lệ đối với kiểu dữ liệu `string`.
+
+3. Sub-request C (Đích đến): Nhắm vào Route C (`/wp-json/wp/v2/posts`), nơi sẽ gọi hàm `WP_Query` để truy vấn cơ sở dữ liệu.
+
+
+#### Bước 2 — WordPress làm lệch hai mảng
+
+Sau vòng match và validation, `$validation` có đủ ba vị trí nhưng `$matches` chỉ có hai phần tử. Handler B và Handler C vì thế bị dịch lên trước một index:
+
+| Index | Sub-request đang xét | `$validation` | `$matches` tại cùng index |
+| --- | --- | --- | --- |
+| 0 | Request A — lỗi | `WP_Error` của A | Handler B |
+| 1 | Request B — dữ liệu | Validation của B thành công | Handler C — Posts collection |
+| 2 | Request C — đích | Validation của C thành công | Không tồn tại |
+
+Điểm cần chú ý là `$matches` không có một slot dành cho A. Vì mảng được append liên tục, Handler B rơi vào index 0 và Handler C rơi vào index 1.
+
+#### Bước 3 — Ma trận thực thi ghép nhầm context
+
+- **Tại index 0:** `$validation[0]` là `WP_Error`, nên Request A bị bỏ qua.
+- **Tại index 1:** WordPress lấy **Request B + validation của B**, nhưng thực thi bằng **Handler C** của Posts collection route.
+
+Handler C vì thế nhận dữ liệu vốn được duyệt theo schema của Route B. Kết quả validation vẫn báo thành công, nhưng nó chứng minh dữ liệu hợp lệ cho **Route B**, không phải cho contract mà **Handler C** đang kỳ vọng.
+
+#### Bước 4 — Kích hoạt SQL injection trước xác thực
+
+1. Chuỗi `"1) UNION SELECT..."` chui xuống `WP_Query`.
+
+2. Do **CVE-2026-60137**, `WP_Query` thấy đây là chuỗi scalar (không phải `array`) nên bỏ qua bước `absint`.
+
+3. Câu lệnh SQL hoàn chỉnh được kích hoạt:
+
+```SQL
+SELECT * FROM wp_posts WHERE ... AND posts.post_author NOT IN (1) UNION SELECT ... --)
+```
+
+4. Kết quả: Kẻ tấn công trích xuất thành công dữ liệu từ Database mà không cần đăng nhập (Pre-auth SQLi)!
 
 ## Từ SQLi chỉ đọc đến RCE
 
