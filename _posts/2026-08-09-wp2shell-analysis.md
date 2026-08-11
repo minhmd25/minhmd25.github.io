@@ -137,6 +137,10 @@ flowchart TB
         C["index 2<br/>Request C"] -.- EMPTY["index 2<br/>không tồn tại"]
     end
 
+    HEAD ~~~ ROW0
+    ROW0 ~~~ ROW1
+    ROW1 ~~~ ROW2
+
     classDef header fill:transparent,stroke:transparent,font-weight:bold
     classDef error fill:#2b2415,stroke:#d4a72c,color:#f0c75e,stroke-width:2px
     classDef missing fill:transparent,stroke:#777,color:#aaa,stroke-width:2px,stroke-dasharray:6 4
