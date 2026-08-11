@@ -32,18 +32,8 @@ Lỗi thứ nhất làm dữ liệu được validation theo route này nhưng �
 | Bản sửa | 6.9.5; 7.0.2 |
 | Tác động cuối | Tạo administrator, sau đó dùng chức năng quản trị để đạt RCE |
 
-## Phương pháp và nguồn bằng chứng
-
-Bài phân tích dùng bốn lớp bằng chứng độc lập:
-
-| Luận điểm | Bằng chứng |
-| --- | --- |
-| Phạm vi và bản vá | [WordPress 7.0.2 Security Release](https://wordpress.org/news/2026/07/wordpress-7-0-2-release/) |
-| Hai CVE tạo thành RCE | GHSA chính thức cho [route confusion](https://github.com/WordPress/wordpress-develop/security/advisories/GHSA-ff9f-jf42-662q) và [SQLi](https://github.com/WordPress/wordpress-develop/security/advisories/GHSA-fpp7-x2x2-2mjf) |
-| Nguyên nhân gốc | Diff source WordPress 6.9.4 → 6.9.5 |
-| Chuỗi SQLi → RCE | Bài công bố kỹ thuật của [Adam Kues / Searchlight Cyber](https://slcyber.io/research-center/exploit-brokers-pay-500000-for-a-wordpress-rce-i-found-one-with-gpt5-6/) |
-
-Điểm quan trọng của cách tiếp cận này là không suy luận chỉ từ tiêu đề CVE. Ta kiểm tra xem code cũ sai ở đâu, code mới thay đổi bất biến nào, rồi đối chiếu với chuỗi runtime mà nhóm phát hiện đã tái hiện trên WordPress mặc định.
+Thì để có thể hiểu được chuỗi này, trước hết cần nắm rõ cách REST Batch hoạt động và tại sao CVE-2026-63030 lại phá vỡ tính bất biến giữa validation và handler, và sau đó làm thế nào CVE-2026-60137 cho phép scalar đi thẳng vào SQL sink.
+Chúng ta sẽ đi qua từng vấn đề một cách chi tiết để hiểu rõ cơ chế và cách khai thác của chain này.
 
 ## Mô hình xử lý đúng của REST Batch
 
@@ -113,8 +103,6 @@ Nếu request đầu tiên lỗi:
 
 Vòng thực thi thứ hai bỏ qua A vì nó là lỗi. Tại index 1, WordPress lấy **request B + validation B**, nhưng lại dùng **handler C**. Dữ liệu đã được kiểm tra theo schema của một route có thể được thực thi trong route khác.
 
-Có thể  tưởng tượng như khi xếp hàng khám bệnh: Y tá phát phiếu kiểm tra cho 3 người A, B, C. Người A bị thiếu hồ sơ nên bị loại ra, nhưng y tá lại quên không rút số thứ tự của A ra khỏi danh sách chờ gặp Bác sĩ. Kết quả là Bác sĩ lấy hồ sơ khám của bệnh nhân B nhưng lại áp dụng đơn thuốc/quy trình cho bệnh nhân C.
-
 ```mermaid
 flowchart TB
     subgraph HEAD[" "]
@@ -153,9 +141,11 @@ flowchart TB
     style ROW2 fill:transparent,stroke:transparent
 ```
 
+Có thể  tưởng tượng như khi xếp hàng khám bệnh: Y tá phát phiếu kiểm tra cho 3 người A, B, C. Người A bị thiếu hồ sơ nên bị loại ra, nhưng y tá lại quên không rút số thứ tự của A ra khỏi danh sách chờ gặp Bác sĩ. Kết quả là Bác sĩ lấy hồ sơ khám của bệnh nhân B nhưng lại áp dụng đơn thuốc/quy trình cho bệnh nhân C.
+
 Đây không đơn thuần là “quên permission check”. Permission callback vẫn chạy, nhưng nó chạy trong **ngữ cảnh đã bị ghép sai**.
 
-### Bản vá chứng minh giả thuyết
+### Bản vá 
 
 WordPress 6.9.5 thêm đúng một phần tử vào `$matches` ở nhánh lỗi:
 
@@ -170,7 +160,7 @@ if ( is_wp_error( $single_request ) ) {
 
 Xem [source sau bản vá](https://github.com/WordPress/wordpress-develop/blob/6.9.5/src/wp-includes/rest-api/class-wp-rest-server.php#L1751-L1764). Thay đổi này giữ độ dài và index của hai mảng đồng bộ ngay cả khi một request parse thất bại.
 
-Đây là **proof by patch**: bản vá khôi phục đúng bất biến mà phân tích ở trên cho rằng đã bị phá vỡ.
+Đây là **proof by patch**: bản vá khôi phục đúng tính bất biến mà mình đã phân tích ở trên cho rằng đã bị phá vỡ.
 
 ## CVE-2026-60137: scalar đi thẳng vào câu SQL
 
