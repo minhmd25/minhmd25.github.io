@@ -141,7 +141,7 @@ flowchart TB
     style ROW2 fill:transparent,stroke:transparent
 ```
 
-Có thể  tưởng tượng như khi xếp hàng khám bệnh: Y tá phát phiếu kiểm tra cho 3 người A, B, C. Người A bị thiếu hồ sơ nên bị loại ra, nhưng y tá lại quên không rút số thứ tự của A ra khỏi danh sách chờ gặp Bác sĩ. Kết quả là Bác sĩ lấy hồ sơ khám của bệnh nhân B nhưng lại áp dụng đơn thuốc/quy trình cho bệnh nhân C.
+> Có thể  tưởng tượng như khi xếp hàng khám bệnh: Y tá phát phiếu kiểm tra cho 3 người A, B, C. Người A bị thiếu hồ sơ nên bị loại ra, nhưng y tá lại quên không rút số thứ tự của A ra khỏi danh sách chờ gặp Bác sĩ. Kết quả là Bác sĩ lấy hồ sơ khám của bệnh nhân B nhưng lại áp dụng đơn thuốc/quy trình cho bệnh nhân C.
 
 Đây không đơn thuần là “quên permission check”. Permission callback vẫn chạy, nhưng nó chạy trong **ngữ cảnh đã bị ghép sai**.
 
@@ -170,17 +170,23 @@ Xem [source sau bản vá](https://github.com/WordPress/wordpress-develop/blob/6
 
 ```php
 if ( ! empty( $query_vars['author__not_in'] ) ) {
+    // BƯỚC 1: Chỉ kiểm tra và làm sạch NẾU NÓ LÀ MẢNG (ARRAY)
     if ( is_array( $query_vars['author__not_in'] ) ) {
         $query_vars['author__not_in'] =
             array_map( 'absint', $query_vars['author__not_in'] );
     }
-
+    // BƯỚC 2: Ép kiểu thành mảng và nối chuỗi
     $ids = implode( ',', (array) $query_vars['author__not_in'] );
+    // BƯỚC 3: Ghép trực tiếp vào câu lệnh SQL (Sink)
     $where .= " AND posts.post_author NOT IN ($ids) ";
 }
 ```
 
 Nếu giá trị là scalar string, nhánh ép kiểu bị bỏ qua. Cast `(array)` chỉ biến string thành mảng chứa chính string đó; nó không biến nội dung thành số. Sau `implode()`, dữ liệu vẫn được nối vào SQL.
+
+> Hãy tưởng tượng trạm kiểm soát an ninh sân bay có quy định:
+- Nếu hành khách mang Một chiếc vali (Array): Bảo vệ sẽ bắt mở vali ra và soi X-ray từng món đồ (absint - lọc sạch mọi thứ nguy hiểm, chỉ giữ lại số nguyên).
+- Nếu hành khách chỉ cầm Một món đồ lẻ trên tay (Scalar String): Bảo vệ nghĩ "Ồ, đây không phải vali!", nên bỏ qua bước soi X-ray, nhét món đồ đó vào một chiếc túi ni-lông (array) rồi cho đi thẳng lên máy bay (nối thẳng vào câu lệnh SQL).
 
 Source gốc nằm tại [`class-wp-query.php` của WordPress 6.9.4](https://github.com/WordPress/wordpress-develop/blob/6.9.4/src/wp-includes/class-wp-query.php#L2403-L2410).
 
