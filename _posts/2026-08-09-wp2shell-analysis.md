@@ -196,6 +196,7 @@ Kịch bản 1: Đúng như lập trình viên mong đợi (Truyền Mảng)
     2. `array_map('absint', ...)` hoạt động: Chuỗi `"3' OR 1=1"` bị ép thành số integer `3`.
     3. `$ids` trở thành `"1,2,3"`.
     4. Câu SQL thu được: `AND posts.post_author NOT IN (1,2,3)` $\rightarrow$ An toàn!
+    
 Kịch bản 2: Kẻ tấn công lợi dụng lỗ hổng (Truyền Chuỗi / Scalar String)
 - Đầu vào (Input): `author__not_in = "1) UNION SELECT ... --"` (chuỗi ký tự, không phải mảng)
 - Xử lý:
