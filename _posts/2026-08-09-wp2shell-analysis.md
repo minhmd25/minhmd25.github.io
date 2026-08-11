@@ -184,9 +184,16 @@ if ( ! empty( $query_vars['author__not_in'] ) ) {
 
 Nếu giá trị là scalar string, nhánh ép kiểu bị bỏ qua. Cast `(array)` chỉ biến string thành mảng chứa chính string đó; nó không biến nội dung thành số. Sau `implode()`, dữ liệu vẫn được nối vào SQL.
 
-> Hãy tưởng tượng trạm kiểm soát an ninh sân bay có quy định:
-- Nếu hành khách mang Một chiếc vali (Array): Bảo vệ sẽ bắt mở vali ra và soi X-ray từng món đồ (absint - lọc sạch mọi thứ nguy hiểm, chỉ giữ lại số nguyên).
+> Lấy 1 ví dụ nhỏ để dễ  hình dung, hãy tưởng tượng trạm kiểm soát an ninh sân bay có quy định:
+- Nếu hành khách mang Một chiếc vali (Array): Bảo vệ sẽ bắt mở vali ra và soi X-ray từng món đồ (absint - lọc sạch mọi thứ nguy hiểm, chỉ giữ lại số nguyên)
 - Nếu hành khách chỉ cầm Một món đồ lẻ trên tay (Scalar String): Bảo vệ nghĩ "Ồ, đây không phải vali!", nên bỏ qua bước soi X-ray, nhét món đồ đó vào một chiếc túi ni-lông (array) rồi cho đi thẳng lên máy bay (nối thẳng vào câu lệnh SQL).
+Chính sơ hở này đã cho phép món đồ nguy hiểm (mã độc SQL) lọt qua kiểm duyệt!
+
+Kịch bản 1: Đúng như lập trình viên mong đợi (Truyền Mảng)
+- Đầu vào (Input): author__not_in = [1, 2, "3' OR 1=1"]
+- Xử lý:
+- - is_array() trả về TRUE.array_map('absint', ...) hoạt động: Chuỗi "3' OR 1=1" bị ép thành số integer 3.$ids trở thành "1,2,3".Câu SQL thu được: AND posts.post_author NOT IN (1,2,3) $\rightarrow$ An toàn!Kịch bản 2: Kẻ tấn công lợi dụng lỗ hổng (Truyền Chuỗi / Scalar String)Đầu vào (Input): author__not_in = "1) UNION SELECT ... --" (chuỗi ký tự, không phải mảng)Xử lý:is_array() trả về FALSE $\rightarrow$ Bỏ qua toàn bộ bước làm sạch absint!Ép kiểu (array) "1) UNION SELECT ... --" biến chuỗi này thành một mảng chứa 1 phần tử: ["1) UNION SELECT ... --"].implode() nối mảng ra lại đúng chuỗi độc hại ban đầu: "1) UNION SELECT ... --".Ghép thẳng vào SQL:SQLAND posts.post_author NOT IN (1) UNION SELECT ... --)
+$\rightarrow$ SQL Injection thành công!
 
 Source gốc nằm tại [`class-wp-query.php` của WordPress 6.9.4](https://github.com/WordPress/wordpress-develop/blob/6.9.4/src/wp-includes/class-wp-query.php#L2403-L2410).
 
