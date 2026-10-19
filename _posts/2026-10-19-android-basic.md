@@ -13,7 +13,7 @@ mermaid: true
 
 Mình được giao task học mobile pentest, nên quyết định ghi lại quá trình học thành một series. Bài đầu này dựa trên phần *Android Basics* trong khóa Android Application Security của Mobile Hacking Lab.
 
-Chưa có khai thác gì ở bài này. Mục tiêu chỉ là hiểu Android được tổ chức ra sao và một ứng dụng gồm những gì, để các bài sau đọc code hay tìm lỗi không bị lạc.
+Mục tiêu đầu tiên là hiểu Android được tổ chức ra sao và một ứng dụng gồm những gì, để các bài sau đọc code hay tìm lỗi không bị lạc.
 
 ---
 
