@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "Mobile Pentest #1: Android Basic"
-date: 2026-10-18 09:00:00 +0700
+date: 2026-10-15 09:00:00 +0700
 categories: [Mobile Pentest, Android]
 tags: [android, mobile-pentest, basic, mobile-hacking-lab]
 description: "Ghi chép quá trình học mobile pentest: kiến trúc Android, cơ chế bảo mật, cấu trúc một ứng dụng và cách app được ký, phát hành."
