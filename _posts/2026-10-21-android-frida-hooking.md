@@ -68,71 +68,11 @@ frida-trace -U -f org.chromium.webview_shell -j 'android.webkit.WebView!*'
 ngon rồi bắt được luôn class và func chứa nơi xử lý chức năng này, ta search ngay trong jadx
 ![alt text](../assets/img/jadx_loadUrl.png)
 
+
+## 3. Bước 2: Chạy script
 oke tiếp đến thì viết script hook test điều hướng 
 
 
-### Bản hoàn chỉnh: thay đổi hành vi
-
-```javascript
-// TODO: script cuối cùng
-```
-
-TODO: Giải thích những dòng quan trọng. Nếu hàm có overload thì ghi chú cách xử lý bằng `.overload(...)`.
-
-> TODO (tùy chọn): ghi chú những chỗ bạn bị vấp, ví dụ sai tên class, hàm bị overload, app crash khi hook.
-{: .prompt-tip }
-
----
-
-## 4. Bước 3: Chạy script
-
-Chạy `frida-server` trên máy ảo (nếu chưa chạy), rồi:
-
-```bash
-# Gắn vào app đang chạy
-frida -U -n "TODO: tên tiến trình" -l hook.js
-
-# Hoặc khởi chạy app cùng với script
-frida -U -f TODO.package.name -l hook.js
-```
-
-TODO: Nên dùng cách nào cho case này và vì sao (`-n` gắn vào app đang chạy, `-f` spawn từ đầu, cần khi kiểm tra chạy ngay lúc khởi động).
-
----
-
-## 5. Kết quả
-
-TODO: Trước và sau khi hook, app khác nhau thế nào. Ảnh chụp hoặc output so sánh.
-
-| | Trước khi hook | Sau khi hook |
-| --- | --- | --- |
-| Hành vi | TODO | TODO |
-| Kết quả | TODO | TODO |
-
-![TODO: mô tả ảnh](/assets/img/posts/android-frida/02-result.png)
-
----
-
-## 6. Vì sao hook được, và dev nên vá thế nào
-
-<!-- Phần này làm bài có giá trị hơn một bài "làm theo là ra". 2-4 gạch đầu dòng là đủ. -->
-
-- **Nguyên nhân:** TODO, ví dụ: kiểm tra chỉ nằm ở phía client nên người dùng kiểm soát được.
-- **Mức độ ảnh hưởng:** TODO
-- **Cách khắc phục:** TODO, ví dụ: chuyển kiểm tra xuống server, thêm kiểm tra toàn vẹn, obfuscation (chỉ làm khó chứ không ngăn được).
-
----
-
-## Tóm lại
-
-<!-- 3-4 gạch đầu dòng. Nhắc lại luồng làm. -->
-
-1. Chạy thử app và đọc code bằng JADX để tìm hàm cần hook.
-2. Viết script Frida, bắt đầu bằng bản chỉ in log.
-3. Sau khi hiểu hàm nhận và trả gì thì mới sửa.
-4. TODO: bài học riêng của case này.
-
-Bài sau: TODO (ví dụ: bắt traffic qua Burp và xử lý SSL pinning).
 
 ---
 
