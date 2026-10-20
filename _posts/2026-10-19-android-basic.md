@@ -11,9 +11,9 @@ mermaid: true
 
 ## Mở đầu
 
-Mình được giao task học mobile pentest, nên quyết định ghi lại quá trình học thành một series. Bài đầu này dựa trên phần *Android Basics* trong khóa Android Application Security của Mobile Hacking Lab.
+Sao khi đã lăn lộn với các kiến thức pentest webapp trong một thời gian rồi thì nay vừa đúng lúc có task mới thì mình học và tìm hiểu thêm 1 mảng mobile pentest nữa và sẽ note lại các điểm trong quá trình học thêm mục này vừa để  ghi nhớ và note lại. Bài đầu này dựa trên phần *Android Basics* trong khóa Android Application Security của Mobile Hacking Lab.
 
-Mục tiêu đầu tiên là hiểu Android được tổ chức ra sao và một ứng dụng gồm những gì, để các bài sau đọc code hay tìm lỗi không bị lạc.
+Mục tiêu đầu tiên là hiểu Android được tổ chức ra sao và một ứng dụng gồm những gì.
 
 ---
 
@@ -48,7 +48,7 @@ Về runtime, ART dùng biên dịch AOT (ahead-of-time), tức là biên dịch
 
 ## 2. Android bảo vệ người dùng thế nào
 
-Khóa học chia bảo mật của Android làm 4 nhóm:
+Theo những gì mình đọc và hiểu được thì bảo mật Android được chia làm 4 nhóm:
 
 **System security**
 - Mã hóa thiết bị: file-based từ Android 7, full-disk từ Android 5.
@@ -70,7 +70,7 @@ Khóa học chia bảo mật của Android làm 4 nhóm:
 - Seccomp filter để giới hạn syscall.
 
 > Với pentest app, hai thứ mình sẽ đụng nhiều nhất là certificate pinning (khi bắt traffic) và sandbox (khi tìm dữ liệu lưu trên máy).
-{: .prompt-tip }
+
 
 ---
 
@@ -135,19 +135,6 @@ IPC (Inter-Process Communication) là cách các app, hay các sandbox, trao đ�
 - Store khác như Amazon Appstore.
 - Hoặc không lên store, chỉ đưa link tải APK.
 
-Điều này liên quan trực tiếp tới pentest. Khi sửa một APK rồi đóng gói lại, mình phải ký lại, và chữ ký sẽ khác bản gốc.
-
----
-
-## 5. Lộ trình sắp tới
-
-Phần cơ bản này là bước đầu của khóa học. Các phần sau theo thứ tự:
-
-1. Android Penetration Testing Basics: dựng lab, bắt traffic, dynamic instrumentation, OWASP MAS.
-2. Reverse Engineering: decompile APK/AAB với apktool và JADX.
-3. Android Application Attack Surface: IPC và `exported`, lưu trữ dữ liệu, deep link, WebView, SQL injection.
-4. Lab thực hành.
-
 ---
 
 ## Tóm lại
@@ -156,7 +143,6 @@ Phần cơ bản này là bước đầu của khóa học. Các phần sau theo
 - Bảo mật nằm ở nhiều lớp: mã hóa, verified boot, TLS, SELinux, ASLR...
 - Mỗi app là một sandbox riêng, giao tiếp ra ngoài qua IPC.
 - Một app có manifest và 4 loại component. Component `exported` chính là bề mặt tấn công.
-- Phần tiếp theo mình sẽ dựng lab để bắt đầu thực hành.
 
 ---
 
