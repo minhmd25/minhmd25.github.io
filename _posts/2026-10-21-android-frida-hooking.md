@@ -4,7 +4,6 @@ title: "Mobile Pentest #3: Thực hành hook ứng dụng Android bằng Frida"
 date: 2026-10-20 09:00:00 +0700
 categories: [Mobile Pentest, Android]
 tags: [android, mobile-pentest, frida, hooking, dynamic-analysis]
-description: "TODO: viết 1 câu mô tả, ví dụ: dùng Frida hook hàm kiểm tra trong app <tên app> để <mục tiêu>."
 toc: true
 mermaid: true
 ---
@@ -124,11 +123,6 @@ Trong `implementation`, `this` là đối tượng đang gọi hàm. Dòng này 
 khi t hook và quan sát sẽ thấy mọi url nhập vào ô tìm kiếm sẽ luôn được điều hướng về url ta đã chỉ định 
 
 ![alt text](../assets/img/hook_3.png)
-
-
-
-
-
 
 ---
 
