@@ -130,4 +130,3 @@ khi t hook và quan sát sẽ thấy mọi url nhập vào ô tìm kiếm sẽ l
 
 - [Frida Documentation](https://frida.re/docs/home/)
 - [OWASP MASTG](https://mas.owasp.org/MASTG/)
-- TODO: nguồn lab / app
